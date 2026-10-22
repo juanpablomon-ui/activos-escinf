@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activos ESCINF</title>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca">
+      <span class="escudo">🎖</span>
+      <div>
+        <h1>Activos ESCINF</h1>
+        <p id="fuente">Material y equipo de la Escuela de Infantería</p>
+      </div>
+    </div>
+    <div class="acciones">
+      <label class="boton principal">📂 Cargar Excel
+        <input type="file" id="archivo" accept=".xlsx,.xls" hidden>
+      </label>
+      <button class="boton" id="imprimir" hidden>🖨 Imprimir</button>
+    </div>
+  </header>
+
+  <nav class="pestanas" id="pestanas" hidden>
+    <button data-vista="buscar" class="activa">🔎 Buscar material</button>
+    <button data-vista="unidades">🏢 Por unidad</button>
+    <button data-vista="movimientos">🔁 Movimientos OAL</button>
+    <button data-vista="combustible">⛽ Combustible</button>
+    <button data-vista="alertas">⚠️ Alertas <span id="nAlertas" class="globo"></span></button>
+  </nav>
+
+  <main>
+    <!-- Sin datos todavía -->
+    <section id="bienvenida" class="bienvenida">
+      <div class="caja-carga" id="zonaCarga">
+        <div class="icono-grande">📦</div>
+        <h2>Cargue el Excel de distribución de activos bélicos</h2>
+        <p>Arrastre aquí el archivo del S-4 (por ejemplo <b>DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 15ENE2026.xlsx</b>) o use el botón <b>📂 Cargar Excel</b>.</p>
+        <p class="nota">El archivo se lee en este computador. No se envía a ninguna parte.</p>
+      </div>
+    </section>
+
+    <!-- Buscar -->
+    <section id="vista-buscar" class="vista" hidden>
+      <div class="resumen" id="resumen"></div>
+      <div class="filtros">
+        <input type="search" id="busqueda" placeholder="Escriba lo que busca: fusil, galil, radio, casco, camioneta…" autocomplete="off">
+        <select id="filtroUnidad"><option value="">Todas las unidades</option></select>
+        <select id="filtroRevista">
+          <option value="">Revista: todos</option>
+          <option value="revistado">🟠 Revistado</option>
+          <option value="no_revistado">🟡 No revistado</option>
+          <option value="por_revistar">🟢 Por revistar</option>
+        </select>
+        <select id="orden">
+          <option value="excel">Orden del Excel</option>
+          <option value="cantidad">Mayor cantidad primero</option>
+          <option value="nombre">Por nombre (A-Z)</option>
+        </select>
+      </div>
+      <div class="chips" id="tipos"></div>
+      <p class="contador" id="contador"></p>
+      <div id="lista" class="lista"></div>
+    </section>
+
+    <!-- Por unidad -->
+    <section id="vista-unidades" class="vista" hidden>
+      <p class="ayuda">Toque una unidad para ver todo lo que tiene a cargo.</p>
+      <div id="tarjetasUnidades" class="rejilla"></div>
+    </section>
+
+    <section id="vista-movimientos" class="vista" hidden>
+      <p class="ayuda">Órdenes de alta y baja internas (hoja «OAL INTERNAS» del Excel).</p>
+      <div id="tablaMovimientos"></div>
+    </section>
+
+    <section id="vista-combustible" class="vista" hidden>
+      <p class="ayuda">Asignaciones de combustible (hoja «COMBUSTIBLE» del Excel).</p>
+      <div id="tablaCombustible"></div>
+    </section>
+
+    <section id="vista-alertas" class="vista" hidden>
+      <div id="listaAlertas"></div>
+    </section>
+  </main>
+
+  <!-- Ficha de un material -->
+  <dialog id="ficha">
+    <div id="fichaContenido"></div>
+    <form method="dialog"><button class="boton principal">Cerrar</button></form>
+  </dialog>
+
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="leer_excel.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
