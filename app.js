@@ -54,6 +54,16 @@
     const sel = $('filtroUnidad');
     sel.innerHTML = '<option value="">Todas las unidades</option>' +
       datos.unidades.map((u) => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+    // Filtros que solo se muestran si el Excel trae esa información
+    $('filtroRevista').hidden = !datos.activos.some((a) => a.revista);
+    $('filtroNota').hidden = !datos.activos.some((a) => a.nota);
+    if ($('filtroRevista').hidden) $('filtroRevista').value = '';
+    if ($('filtroNota').hidden) $('filtroNota').value = '';
+    // Pestañas de hojas que este Excel no trae
+    const pestana = (v) => document.querySelector(`#pestanas [data-vista="${v}"]`);
+    pestana('movimientos').hidden = !datos.movimientos.filas.length;
+    pestana('combustible').hidden = !datos.combustible.filas.length;
+    if (pestana(estado.vista).hidden) estado.vista = 'buscar';
 
     pintarResumen();
     pintarTipos();
@@ -77,12 +87,14 @@
   function filtrados() {
     const unidad = $('filtroUnidad').value;
     const revista = $('filtroRevista').value;
+    const conNota = $('filtroNota').value === 'si';
     const palabras = normal($('busqueda').value).split(/\s+/).filter(Boolean);
     let lista = estado.datos.activos.filter((a) => {
       if (unidad && !a.reparto[unidad]) return false;
       if (estado.tipo && a.tipo !== estado.tipo) return false;
       if (revista && a.revista !== revista) return false;
-      const texto = normal(a.nombre + ' ' + a.tipo + ' ' + a.cimage);
+      if (conNota && !a.nota) return false;
+      const texto = normal(a.nombre + ' ' + a.tipo + ' ' + a.cimage + ' ' + (a.nota || ''));
       return palabras.every((p) => texto.includes(p));
     });
     const orden = $('orden').value;
@@ -154,6 +166,7 @@
         <div class="total"><b>${miles(cantidad(a, unidad))}</b><small>${unidad ? 'en ' + esc(unidad) : 'en total'}</small></div>
         <div class="reparto">${reparto || '<span class="nota">Sin distribución</span>'}</div>
         ${aviso}
+        ${a.nota ? `<div class="nota-txt">📝 ${resaltar(a.nota, palabras)}</div>` : ''}
       </button>`;
     }).join('');
   }
@@ -177,6 +190,7 @@
       <dl class="datos-ficha">
         <dt>Total distribuido</dt><dd><b>${miles(a.total)}</b></dd>
         <dt>Cargo</dt><dd>${miles(a.cargo)}${a.diferencia ? ` <span class="alerta-txt">(diferencia ${miles(a.diferencia)})</span>` : ''}</dd>
+        ${a.nota ? `<dt>Observación</dt><dd class="nota-txt">📝 ${esc(a.nota)}</dd>` : ''}
         <dt>CIMAGE</dt><dd>${esc(a.cimage) || '—'}</dd>
         <dt>Revista</dt><dd>${a.revista ? REVISTA[a.revista].punto + ' ' + REVISTA[a.revista].texto : 'Sin marca en el Excel'}</dd>
         <dt>En el Excel</dt><dd>N° ${esc(a.n) || '—'}, fila ${a.fila}</dd>
@@ -216,6 +230,12 @@
   function pintarAlertas() {
     const d = estado.datos;
     const bloques = [];
+    const conNota = d.activos.filter((a) => a.nota);
+    if (conNota.length) {
+      bloques.push(`<div class="bloque-alerta"><h3>📝 Observaciones del S-4 (${conNota.length})</h3>
+        ${tablaHTML({ titulos: ['N°', 'Nomenclatura', 'Cantidad', 'Observación'],
+          filas: conNota.map((a) => [a.n, a.nombre, miles(a.total), a.nota]) }, ['CANTIDAD'])}</div>`);
+    }
     const conDiferencia = d.activos.filter((a) => a.diferencia);
     if (conDiferencia.length) {
       bloques.push(`<div class="bloque-alerta grave"><h3>⚠️ Cargo distinto a lo distribuido (${conDiferencia.length})</h3>
@@ -240,13 +260,13 @@
         <p>En el Excel la columna TIPO DE ACTIVO dice «?». Aparecen en el filtro «${LeerExcel.TIPO_SIN}». Si se completa esa columna, la búsqueda por tipo queda más ordenada.</p></div>`);
     }
     $('listaAlertas').innerHTML = bloques.join('') || '<p>Sin alertas. 👍</p>';
-    $('nAlertas').textContent = conDiferencia.length + sinReparto.length || '';
+    $('nAlertas').textContent = conNota.length + conDiferencia.length + sinReparto.length || '';
   }
 
   // ---------- Eventos ----------
   $('archivo').addEventListener('change', (e) => { cargarArchivo(e.target.files[0]); e.target.value = ''; });
   $('imprimir').addEventListener('click', () => window.print());
-  ['busqueda', 'filtroUnidad', 'filtroRevista', 'orden'].forEach((id) => $(id).addEventListener('input', pintarLista));
+  ['busqueda', 'filtroUnidad', 'filtroRevista', 'filtroNota', 'orden'].forEach((id) => $(id).addEventListener('input', pintarLista));
   $('tipos').addEventListener('click', (e) => {
     const b = e.target.closest('.chip');
     if (!b) return;

@@ -61,11 +61,14 @@
     // Ubicar columnas por su título
     const col = {};
     const unidades = [];
+    // Observaciones: columna con título OBSERV… o columnas sin título después de las unidades
+    const notas = [];
     let despuesDiferencia = false;
     for (let c = rango.s.c; c <= rango.e.c; c++) {
       const titulo = limpiar((celda(fila, c) || {}).v);
       const n = normal(titulo);
-      if (!n) continue;
+      if (/OBSERV|NOTA|COMENTARIO/.test(n)) { notas.push(c); continue; }
+      if (!n) { if (despuesDiferencia) notas.push(c); continue; }
       if (despuesDiferencia) { unidades.push({ col: c, nombre: titulo }); continue; }
       if (n === 'N°' || n === 'Nº' || n === 'NO' || n === 'N') col.n = c;
       else if (n === 'CIMAGE') col.cimage = c;
@@ -94,6 +97,8 @@
         const e = leyenda[colorDe(celda(f, c))];
         if (e) { revista = e; break; }
       }
+      const nota = notas.map((c) => (celda(f, c) || {}).v)
+        .filter((v) => typeof v === 'string' && limpiar(v)).map(limpiar).join(' · ');
       const cimage = (celda(f, col.cimage) || {});
       const cargo = col.cargo != null ? numero((celda(f, col.cargo) || {}).v) : suma;
       activos.push({
@@ -106,6 +111,7 @@
         diferencia: suma - cargo,
         reparto,
         revista,
+        nota,
         fila: f + 1
       });
     }

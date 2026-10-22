@@ -168,6 +168,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .etiqueta.marcada { background: var(--verde); color: #fff; }
 .tipo { font-size: 12px; color: var(--suave); text-transform: uppercase; letter-spacing: .03em; }
 .alerta-txt { color: var(--rojo); font-weight: 600; font-size: 13px; }
+.nota-txt { grid-column: 1 / -1; background: #e3f6fb; color: #0b4a5c; border-radius: 6px; padding: 4px 8px; font-size: 14px; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .nota-txt { background: #12384a; color: #bfe9f7; } }
 mark { background: #ffe58a; color: inherit; border-radius: 2px; }
 
 .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
