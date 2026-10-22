@@ -2,8 +2,16 @@
 <html lang="es-CL">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Activos ESCINF</title>
+  <meta name="theme-color" content="#2f4420">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Activos">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="iconos/icono-180.png">
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -17,7 +25,7 @@
     </div>
     <div class="acciones">
       <label class="boton principal">📂 Cargar Excel
-        <input type="file" id="archivo" accept=".xlsx,.xls" hidden>
+        <input type="file" id="archivo" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
       </label>
       <button class="boton" id="imprimir" hidden>🖨 Imprimir</button>
     </div>

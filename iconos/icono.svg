@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2f4420"/>
+  <!-- caja de material -->
+  <path d="M96 196l160-64 160 64v170l-160 64-160-64z" fill="#8a7a3c"/>
+  <path d="M96 196l160 64 160-64-160-64z" fill="#c8a951"/>
+  <path d="M256 260v170l160-64V196z" fill="#6f6230"/>
+  <path d="M96 196l160 64v170L96 366z" fill="#a08d45"/>
+  <!-- franjas de la caja -->
+  <path d="M136 212v170M216 244v170" stroke="#5a4f25" stroke-width="10"/>
+  <path d="M296 244v170M376 212v170" stroke="#4d4320" stroke-width="10"/>
+  <!-- lupa -->
+  <circle cx="356" cy="132" r="62" fill="#e8ecdf" stroke="#1f2a1c" stroke-width="18"/>
+  <circle cx="356" cy="132" r="34" fill="#9cc27d"/>
+  <path d="M400 178l52 52" stroke="#1f2a1c" stroke-width="28" stroke-linecap="round"/>
+</svg>

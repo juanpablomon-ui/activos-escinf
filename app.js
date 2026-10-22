@@ -287,4 +287,9 @@
   const previos = recuperar();
   if (previos && previos.activos) mostrarDatos(previos);
   window.ActivosESCINF = { mostrarDatos };
+
+  // Instalable y sin internet (solo cuando se abre desde una dirección web, no como archivo)
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  }
 })();

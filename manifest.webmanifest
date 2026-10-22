@@ -1,0 +1,17 @@
+{
+  "name": "Activos ESCINF — Material y equipo",
+  "short_name": "Activos",
+  "description": "Consulta del material y equipo de la ESCINF desde el Excel del S-4.",
+  "lang": "es-CL",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#2f4420",
+  "theme_color": "#2f4420",
+  "icons": [
+    {"src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

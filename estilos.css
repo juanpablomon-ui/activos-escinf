@@ -45,6 +45,8 @@ body {
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
+  /* en el iPhone instalado, que no quede bajo la hora y la batería */
+  padding-top: max(12px, env(safe-area-inset-top));
   flex-wrap: wrap;
 }
 .marca { display: flex; align-items: center; gap: 12px; }
@@ -218,7 +220,7 @@ dialog h2 { margin: 4px 0 10px; font-size: 20px; }
 dialog form { text-align: right; margin-top: 12px; }
 
 @media (max-width: 600px) {
-  .barra { padding: 10px 16px; }
+  .barra { padding: max(10px, env(safe-area-inset-top)) 16px 10px; }
   main { padding: 12px 16px; }
   .caja-carga { padding: 24px 16px; }
   .item .total b { font-size: 22px; }
