@@ -2,7 +2,13 @@
 (function () {
   'use strict';
 
-  const CLAVE = 'activos_escinf_datos';
+  // Cada Excel se guarda por separado (la clave de activos es la de siempre, para no perder lo ya cargado)
+  const CLAVES = { activos: 'activos_escinf_datos', vestuario: 'activos_escinf_vestuario' };
+  const LIBROS = {
+    activos: { nombre: 'activos bélicos', ejemplo: 'DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 22OCT2026.xlsx' },
+    vestuario: { nombre: 'vestuario y equipo', ejemplo: 'CUADRO DISTRIBUCIÓN VEST Y EQUIPO ESCINF 2026.xlsx' }
+  };
+  const CLAVE_LIBRO = 'activos_escinf_libro';
   const REVISTA = {
     revistado: { texto: 'Revistado', punto: '🟠' },
     no_revistado: { texto: 'No revistado', punto: '🟡' },
@@ -10,18 +16,21 @@
   };
 
   const $ = (id) => document.getElementById(id);
-  const estado = { datos: null, tipo: '', vista: 'buscar' };
+  const estado = { libros: { activos: null, vestuario: null }, libro: 'activos', datos: null, tipo: '', vista: 'buscar' };
 
   const normal = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const miles = (n) => Number(n || 0).toLocaleString('es-CL');
 
   // ---------- Guardar / recuperar ----------
-  function guardar(datos) {
-    try { localStorage.setItem(CLAVE, JSON.stringify(datos)); } catch (e) { /* sin memoria: igual se muestra */ }
+  function guardar(clase, datos) {
+    try { localStorage.setItem(CLAVES[clase], JSON.stringify(datos)); } catch (e) { /* sin memoria: igual se muestra */ }
   }
-  function recuperar() {
-    try { return JSON.parse(localStorage.getItem(CLAVE) || 'null'); } catch (e) { return null; }
+  function recuperar(clase) {
+    try { return JSON.parse(localStorage.getItem(CLAVES[clase]) || 'null'); } catch (e) { return null; }
+  }
+  function recordarLibro() {
+    try { localStorage.setItem(CLAVE_LIBRO, estado.libro); } catch (e) { /* no importa */ }
   }
 
   // ---------- Cargar el Excel ----------
@@ -32,8 +41,10 @@
       try {
         const libro = XLSX.read(new Uint8Array(lector.result), { type: 'array', cellStyles: true });
         const datos = LeerExcel.leer(XLSX, libro, archivo.name);
-        guardar(datos);
-        mostrarDatos(datos);
+        const clase = datos.clase || 'activos';
+        guardar(clase, datos);
+        estado.libros[clase] = datos;
+        cambiarLibro(clase);
       } catch (e) {
         alert('No pude leer el Excel.\n\n' + e.message);
       }
@@ -42,6 +53,35 @@
   }
 
   // ---------- Mostrar ----------
+  function pintarLibros() {
+    document.querySelectorAll('#libros button').forEach((b) => {
+      const d = estado.libros[b.dataset.libro];
+      b.classList.toggle('activo', b.dataset.libro === estado.libro);
+      b.querySelector('small').textContent = d ? '' : '(sin cargar)';
+    });
+  }
+
+  // Pasa a la sección elegida: muestra sus datos o, si aún no se carga su Excel, la bienvenida
+  function cambiarLibro(clase) {
+    estado.libro = clase;
+    recordarLibro();
+    pintarLibros();
+    // al cambiar de Excel, los filtros vuelven a cero
+    $('busqueda').value = '';
+    $('filtroRevista').value = '';
+    $('filtroNota').value = '';
+    const datos = estado.libros[clase];
+    if (datos) { mostrarDatos(datos); return; }
+    estado.datos = null;
+    $('bienvenida').hidden = false;
+    $('pestanas').hidden = true;
+    $('imprimir').hidden = true;
+    document.querySelectorAll('.vista').forEach((s) => { s.hidden = true; });
+    $('bienvenidaTitulo').textContent = 'Cargue el Excel de ' + LIBROS[clase].nombre;
+    $('bienvenidaEjemplo').textContent = LIBROS[clase].ejemplo;
+    $('fuente').textContent = 'Material y equipo de la Escuela de Infantería';
+  }
+
   function mostrarDatos(datos) {
     estado.datos = datos;
     estado.tipo = '';
@@ -50,6 +90,9 @@
     $('imprimir').hidden = false;
     const fecha = new Date(datos.cargado).toLocaleDateString('es-CL');
     $('fuente').textContent = (datos.archivo || 'Excel cargado') + ' · cargado el ' + fecha;
+    $('tipos').hidden = new Set(datos.activos.map((a) => a.tipo)).size < 2;
+    $('busqueda').placeholder = 'Escriba lo que busca: ' +
+      (datos.clase === 'vestuario' ? 'casco, mochila, carpa, botas…' : 'fusil, galil, radio, casco, camioneta…');
 
     const sel = $('filtroUnidad');
     sel.innerHTML = '<option value="">Todas las unidades</option>' +
@@ -106,6 +149,20 @@
   function pintarResumen() {
     const d = estado.datos;
     const total = d.activos.reduce((s, a) => s + a.total, 0);
+    const cifra = ([n, t]) => `<div class="cifra"><b>${n}</b><span>${t}</span></div>`;
+    if (d.clase === 'vestuario') {
+      // Cuánto hay en cada situación especial (columnas ISA, III CAT, BAJO RECIBO… si el Excel las trae)
+      const enColumna = (u) => d.activos.reduce((s, a) => s + (a.reparto[u] || 0), 0);
+      const especiales = d.unidades.filter((u) => /BAJO RECIBO|III CAT|ISA|GUARDIA/.test(normal(u)))
+        .map((u) => [miles(enColumna(u)), 'en ' + u]);
+      $('resumen').innerHTML = [
+        [d.activos.length, 'artículos distintos'],
+        [miles(total), 'unidades en total'],
+        [d.unidades.length, 'unidades / destinos'],
+        ...especiales
+      ].map(cifra).join('');
+      return;
+    }
     const tipos = new Set(d.activos.map((a) => a.tipo)).size;
     const armas = d.activos.filter((a) => normal(a.tipo) === 'MATERIAL DE GUERRA').reduce((s, a) => s + a.total, 0);
     const vehiculos = d.activos.filter((a) => normal(a.tipo) === 'VEHICULO').reduce((s, a) => s + a.total, 0);
@@ -116,7 +173,7 @@
       [miles(vehiculos), 'vehículos y remolques'],
       [d.unidades.length, 'unidades / almacenes'],
       [tipos, 'tipos de activo']
-    ].map(([n, t]) => `<div class="cifra"><b>${n}</b><span>${t}</span></div>`).join('');
+    ].map(cifra).join('');
   }
 
   function pintarTipos() {
@@ -191,8 +248,8 @@
         <dt>Total distribuido</dt><dd><b>${miles(a.total)}</b></dd>
         <dt>Cargo</dt><dd>${miles(a.cargo)}${a.diferencia ? ` <span class="alerta-txt">(diferencia ${miles(a.diferencia)})</span>` : ''}</dd>
         ${a.nota ? `<dt>Observación</dt><dd class="nota-txt">📝 ${esc(a.nota)}</dd>` : ''}
-        <dt>CIMAGE</dt><dd>${esc(a.cimage) || '—'}</dd>
-        <dt>Revista</dt><dd>${a.revista ? REVISTA[a.revista].punto + ' ' + REVISTA[a.revista].texto : 'Sin marca en el Excel'}</dd>
+        ${estado.datos.clase === 'vestuario' ? '' : `<dt>CIMAGE</dt><dd>${esc(a.cimage) || '—'}</dd>
+        <dt>Revista</dt><dd>${a.revista ? REVISTA[a.revista].punto + ' ' + REVISTA[a.revista].texto : 'Sin marca en el Excel'}</dd>`}
         <dt>En el Excel</dt><dd>N° ${esc(a.n) || '—'}, fila ${a.fila}</dd>
       </dl>
       <h3>¿Dónde está?</h3>
@@ -206,12 +263,16 @@
     const d = estado.datos;
     $('tarjetasUnidades').innerHTML = d.unidades.map((u) => {
       const suyos = d.activos.filter((a) => a.reparto[u]);
+      // Por tipo de activo; si el Excel tiene un solo tipo (vestuario), los artículos principales
       const porTipo = {};
-      suyos.forEach((a) => { porTipo[a.tipo] = (porTipo[a.tipo] || 0) + a.reparto[u]; });
-      const lineas = Object.entries(porTipo).sort((x, y) => y[1] - x[1])
+      const unSoloTipo = new Set(d.activos.map((a) => a.tipo)).size < 2;
+      suyos.forEach((a) => { const k = unSoloTipo ? a.nombre : a.tipo; porTipo[k] = (porTipo[k] || 0) + a.reparto[u]; });
+      const lineas = Object.entries(porTipo).sort((x, y) => y[1] - x[1]).slice(0, unSoloTipo ? 6 : undefined)
         .map(([t, n]) => `<div class="linea-tipo"><span>${esc(t)}</span><b>${miles(n)}</b></div>`).join('');
       const total = suyos.reduce((s, a) => s + a.reparto[u], 0);
+      const grupo = (d.grupos || {})[u];
       return `<button class="unidad ${suyos.length ? '' : 'vacia'}" data-unidad="${esc(u)}">
+        ${grupo ? `<div class="grupo">${esc(grupo)}</div>` : ''}
         <h3>${esc(u)}</h3>
         <div class="nota">${suyos.length} clases de material · ${miles(total)} unidades</div>
         ${lineas}
@@ -293,6 +354,10 @@
     if (b) irA(b.dataset.vista);
   });
   $('ficha').addEventListener('click', (e) => { if (e.target === $('ficha')) $('ficha').close(); });
+  $('libros').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b && b.dataset.libro !== estado.libro) cambiarLibro(b.dataset.libro);
+  });
 
   // Arrastrar el archivo sobre la página
   const zona = $('zonaCarga');
@@ -304,9 +369,14 @@
     cargarArchivo(e.dataTransfer.files[0]);
   });
 
-  const previos = recuperar();
-  if (previos && previos.activos) mostrarDatos(previos);
-  window.ActivosESCINF = { mostrarDatos };
+  for (const clase of Object.keys(CLAVES)) {
+    const previos = recuperar(clase);
+    if (previos && previos.activos) estado.libros[clase] = previos;
+  }
+  let ultimo = 'activos';
+  try { ultimo = localStorage.getItem(CLAVE_LIBRO) || 'activos'; } catch (e) { /* no importa */ }
+  cambiarLibro(CLAVES[ultimo] ? ultimo : 'activos');
+  window.ActivosESCINF = { mostrarDatos, cambiarLibro };
 
   // Instalable y sin internet (solo cuando se abre desde una dirección web, no como archivo)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {

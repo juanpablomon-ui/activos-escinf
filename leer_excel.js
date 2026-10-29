@@ -63,20 +63,45 @@
     const unidades = [];
     // Observaciones: columna con título OBSERV… o columnas sin título después de las unidades
     const notas = [];
-    let despuesDiferencia = false;
+    // Las unidades van después de DIFERENCIA (activos bélicos) o, si no hay, después de CARGO (vestuario y equipo)
+    let hayDiferencia = false;
+    for (let c = rango.s.c; c <= rango.e.c; c++) if (normal((celda(fila, c) || {}).v).startsWith('DIFERENCIA')) hayDiferencia = true;
+    let enUnidades = false;
     for (let c = rango.s.c; c <= rango.e.c; c++) {
       const titulo = limpiar((celda(fila, c) || {}).v);
       const n = normal(titulo);
       if (/OBSERV|NOTA|COMENTARIO/.test(n)) { notas.push(c); continue; }
-      if (!n) { if (despuesDiferencia) notas.push(c); continue; }
-      if (despuesDiferencia) { unidades.push({ col: c, nombre: titulo }); continue; }
-      if (n === 'N°' || n === 'Nº' || n === 'NO' || n === 'N') col.n = c;
+      if (!n) { if (enUnidades) notas.push(c); continue; }
+      if (/^IGUAL AL CARGO|^TOTAL/.test(n)) continue; // columna de control del Excel, no es unidad
+      if (enUnidades) { unidades.push({ col: c, nombre: titulo }); continue; }
+      if (n === 'N°' || n === 'Nº' || n === 'N.°' || n === 'NO' || n === 'N') col.n = c;
       else if (n === 'CIMAGE') col.cimage = c;
       else if (n.startsWith('TIPO')) col.tipo = c;
       else if (n === 'NOMENCLATURA') col.nombre = c;
       else if (n.startsWith('CARGO DISTRIBUIDO')) col.distribuido = c;
-      else if (n === 'CARGO') col.cargo = c;
-      else if (n.startsWith('DIFERENCIA')) { col.diferencia = c; despuesDiferencia = true; }
+      else if (n === 'CARGO' || n === 'GARGO') { col.cargo = c; if (!hayDiferencia) enUnidades = true; }
+      else if (n.startsWith('DIFERENCIA')) { col.diferencia = c; enUnidades = true; }
+    }
+    const clase = col.cimage != null || col.tipo != null ? 'activos' : 'vestuario';
+
+    // Grupo de cada unidad (fila sobre los títulos, p. ej. «SECRET» sobre CBOA…CASA, «BTN» sobre COMP FUS)
+    const grupos = {};
+    const combinadas = hoja['!merges'] || [];
+    for (const u of unidades) {
+      let g = limpiar((celda(fila - 1, u.col) || {}).v);
+      if (!g) {
+        const m = combinadas.find((x) => x.s.r === fila - 1 && x.s.c <= u.col && u.col <= x.e.c);
+        if (m) g = limpiar((celda(m.s.r, m.s.c) || {}).v);
+      }
+      if (g) grupos[u.nombre] = g;
+    }
+    // Título de la planilla (primer texto largo sobre la tabla)
+    let titulo = '';
+    for (let f = rango.s.r; f < fila && !titulo; f++) {
+      for (let c = rango.s.c; c <= rango.e.c; c++) {
+        const v = limpiar((celda(f, c) || {}).v);
+        if (v.length > 25) { titulo = v; break; }
+      }
     }
 
     const activos = [];
@@ -90,7 +115,8 @@
         if (cant) { reparto[u.nombre] = cant; suma += cant; }
       }
       let tipo = limpiar((celda(f, col.tipo) || {}).v);
-      if (!tipo || /^\?+$/.test(tipo)) tipo = TIPO_SIN;
+      if (clase === 'vestuario') tipo = 'VESTUARIO Y EQUIPO';
+      else if (!tipo || /^\?+$/.test(tipo)) tipo = TIPO_SIN;
       // El estado de revista va en el color de la fila (se mira primero la nomenclatura)
       let revista = null;
       for (const c of [col.nombre, col.n, col.cimage, col.tipo]) {
@@ -115,7 +141,7 @@
         fila: f + 1
       });
     }
-    return { unidades: unidades.map((u) => u.nombre), activos };
+    return { clase, titulo, grupos, unidades: unidades.map((u) => u.nombre), activos };
   }
 
   // Hojas simples (OAL y combustible): primera fila = títulos
@@ -140,6 +166,9 @@
     const oal = hojaCon('OAL');
     const comb = hojaCon('COMBUSTIBLE');
     return {
+      clase: dist.clase, // 'activos' (distribución de activos bélicos) o 'vestuario' (cuadro de vestuario y equipo)
+      titulo: dist.titulo,
+      grupos: dist.grupos,
       archivo: archivo || '',
       cargado: new Date().toISOString(),
       unidades: dist.unidades,

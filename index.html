@@ -31,6 +31,12 @@
     </div>
   </header>
 
+  <!-- Cada Excel del S-4 es una sección aparte, con su propia carga -->
+  <nav class="libros" id="libros">
+    <button data-libro="activos" class="activo">🎖 Activos bélicos <small></small></button>
+    <button data-libro="vestuario">🎒 Vestuario y equipo <small></small></button>
+  </nav>
+
   <nav class="pestanas" id="pestanas" hidden>
     <button data-vista="buscar" class="activa">🔎 Buscar material</button>
     <button data-vista="unidades">🏢 Por unidad</button>
@@ -44,8 +50,9 @@
     <section id="bienvenida" class="bienvenida">
       <div class="caja-carga" id="zonaCarga">
         <div class="icono-grande">📦</div>
-        <h2>Cargue el Excel de distribución de activos bélicos</h2>
-        <p>Arrastre aquí el archivo del S-4 (por ejemplo <b>DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 15ENE2026.xlsx</b>) o use el botón <b>📂 Cargar Excel</b>.</p>
+        <h2 id="bienvenidaTitulo">Cargue el Excel de distribución de activos bélicos</h2>
+        <p>Arrastre aquí el archivo del S-4 (por ejemplo <b id="bienvenidaEjemplo">DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 22OCT2026.xlsx</b>) o use el botón <b>📂 Cargar Excel</b>.</p>
+        <p class="nota">La app reconoce sola qué Excel es (activos bélicos o vestuario y equipo) y lo guarda en su sección.</p>
         <p class="nota">El archivo se lee en este computador. No se envía a ninguna parte.</p>
       </div>
     </section>
