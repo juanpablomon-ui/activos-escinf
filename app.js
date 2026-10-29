@@ -9,6 +9,7 @@
     vestuario: { nombre: 'vestuario y equipo', ejemplo: 'CUADRO DISTRIBUCIÓN VEST Y EQUIPO ESCINF 2026.xlsx' }
   };
   const CLAVE_LIBRO = 'activos_escinf_libro';
+  const DIAS_LIMITE = 15; // pasado este plazo, la información se considera vieja
   const REVISTA = {
     revistado: { texto: 'Revistado', punto: '🟠' },
     no_revistado: { texto: 'No revistado', punto: '🟡' },
@@ -21,6 +22,16 @@
   const normal = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const miles = (n) => Number(n || 0).toLocaleString('es-CL');
+  const dia = (iso) => new Date(iso).toLocaleDateString('es-CL');
+
+  // ---------- Antigüedad de la información ----------
+  // Días desde la fecha de los datos (última modificación del Excel); los datos cargados antes de esta versión usan la fecha de carga
+  function antiguedad(datos) {
+    const fecha = datos.fechaDatos || datos.cargado;
+    const dias = Math.max(0, Math.floor((Date.now() - new Date(fecha)) / 86400000));
+    return { fecha, dias, vieja: dias > DIAS_LIMITE, origen: datos.origenFecha || 'día en que se cargó' };
+  }
+  const textoDias = (n) => (n === 0 ? 'de hoy' : n === 1 ? 'de ayer' : `de hace ${n} días`);
 
   // ---------- Guardar / recuperar ----------
   function guardar(clase, datos) {
@@ -40,7 +51,7 @@
     lector.onload = () => {
       try {
         const libro = XLSX.read(new Uint8Array(lector.result), { type: 'array', cellStyles: true });
-        const datos = LeerExcel.leer(XLSX, libro, archivo.name);
+        const datos = LeerExcel.leer(XLSX, libro, archivo.name, archivo.lastModified);
         const clase = datos.clase || 'activos';
         guardar(clase, datos);
         estado.libros[clase] = datos;
@@ -56,9 +67,43 @@
   function pintarLibros() {
     document.querySelectorAll('#libros button').forEach((b) => {
       const d = estado.libros[b.dataset.libro];
+      const a = d && antiguedad(d);
       b.classList.toggle('activo', b.dataset.libro === estado.libro);
-      b.querySelector('small').textContent = d ? '' : '(sin cargar)';
+      b.classList.toggle('vieja', !!(a && a.vieja));
+      b.querySelector('small').textContent = !d ? '(sin cargar)' : (a.vieja ? '⚠️ ' : '🟢 ') + a.dias + ' d';
+      b.title = !d ? 'Aún no se carga este Excel' : `Información ${textoDias(a.dias)} (${dia(a.fecha)})`;
     });
+  }
+
+  // Aviso rojo sobre la pantalla cuando la información de la sección tiene más de 15 días
+  function pintarAvisoViejo() {
+    const d = estado.datos;
+    const a = d && antiguedad(d);
+    $('avisoViejo').hidden = !(a && a.vieja);
+    if (!a || !a.vieja) return;
+    $('avisoViejo').innerHTML = `<b>⚠️ Información de hace ${a.dias} días.</b>
+      El Excel es del ${dia(a.fecha)} (${esc(a.origen)}) y pasaron más de ${DIAS_LIMITE} días.
+      Pida al S-4 el Excel actualizado y cárguelo con <b>📂 Cargar Excel</b>.`;
+  }
+
+  // Cuadro con cuándo se cargó cada Excel y de qué fecha es su información
+  function cuadroFechas() {
+    const mayuscula = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+    const filas = Object.keys(LIBROS).map((clase) => {
+      const d = estado.libros[clase];
+      const nombre = mayuscula(LIBROS[clase].nombre);
+      if (!d) return `<tr><td>${esc(nombre)}</td><td colspan="4" class="nota">Sin cargar</td></tr>`;
+      const a = antiguedad(d);
+      return `<tr class="${a.vieja ? 'fila-vieja' : ''}"><td>${esc(nombre)}<br><small class="nota">${esc(d.archivo)}</small></td>
+        <td>${dia(a.fecha)}<br><small class="nota">${esc(a.origen)}</small></td>
+        <td>${dia(d.cargado)}</td>
+        <td class="num">${a.dias}</td>
+        <td>${a.vieja ? '🔴 Vieja: pedir Excel nuevo' : '🟢 Al día'}</td></tr>`;
+    }).join('');
+    return `<div class="bloque-alerta"><h3>📅 Excel cargados</h3>
+      <p class="nota">La información se marca en rojo si tiene más de ${DIAS_LIMITE} días.</p>
+      <div class="tabla-scroll"><table><thead><tr><th>Sección</th><th>Información del</th><th>Cargado el</th><th>Días</th><th>Estado</th></tr></thead>
+      <tbody>${filas}</tbody></table></div></div>`;
   }
 
   // Pasa a la sección elegida: muestra sus datos o, si aún no se carga su Excel, la bienvenida
@@ -73,6 +118,7 @@
     const datos = estado.libros[clase];
     if (datos) { mostrarDatos(datos); return; }
     estado.datos = null;
+    $('avisoViejo').hidden = true;
     $('bienvenida').hidden = false;
     $('pestanas').hidden = true;
     $('imprimir').hidden = true;
@@ -88,8 +134,9 @@
     $('bienvenida').hidden = true;
     $('pestanas').hidden = false;
     $('imprimir').hidden = false;
-    const fecha = new Date(datos.cargado).toLocaleDateString('es-CL');
-    $('fuente').textContent = (datos.archivo || 'Excel cargado') + ' · cargado el ' + fecha;
+    const a = antiguedad(datos);
+    $('fuente').textContent = `${datos.archivo || 'Excel cargado'} · información del ${dia(a.fecha)} · cargado el ${dia(datos.cargado)}`;
+    pintarAvisoViejo();
     $('tipos').hidden = new Set(datos.activos.map((a) => a.tipo)).size < 2;
     $('busqueda').placeholder = 'Escriba lo que busca: ' +
       (datos.clase === 'vestuario' ? 'casco, mochila, carpa, botas…' : 'fusil, galil, radio, casco, camioneta…');
@@ -320,8 +367,9 @@
       bloques.push(`<div class="bloque-alerta"><h3>❔ Material sin «tipo de activo» (${sinTipo})</h3>
         <p>En el Excel la columna TIPO DE ACTIVO dice «?». Aparecen en el filtro «${LeerExcel.TIPO_SIN}». Si se completa esa columna, la búsqueda por tipo queda más ordenada.</p></div>`);
     }
-    $('listaAlertas').innerHTML = bloques.join('') || '<p>Sin alertas. 👍</p>';
-    $('nAlertas').textContent = conNota.length + conDiferencia.length + sinReparto.length || '';
+    const vieja = antiguedad(d).vieja ? 1 : 0;
+    $('listaAlertas').innerHTML = cuadroFechas() + (bloques.join('') || '<p>Sin otras alertas. 👍</p>');
+    $('nAlertas').textContent = vieja + conNota.length + conDiferencia.length + sinReparto.length || '';
   }
 
   // ---------- Eventos ----------

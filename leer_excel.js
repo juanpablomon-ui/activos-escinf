@@ -154,7 +154,26 @@
     return { titulos: conDatos[0].map(limpiar), filas: conDatos.slice(1).map((f) => f.map(valor)) };
   }
 
-  function leer(XLSX, wb, archivo) {
+  // Fecha en el nombre del archivo, p. ej. «… 22OCT2026.xlsx» o «15 ENE 2026»
+  const MESES = { ENE: 0, FEB: 1, MAR: 2, ABR: 3, MAY: 4, JUN: 5, JUL: 6, AGO: 7, SEP: 8, SET: 8, OCT: 9, NOV: 10, DIC: 11 };
+  function fechaEnNombre(nombre) {
+    const m = normal(nombre).match(/(\d{1,2})\s*(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\s*(\d{4})/);
+    return m ? new Date(Number(m[3]), MESES[m[2]], Number(m[1]), 12) : null;
+  }
+
+  // ¿De cuándo es la información? 1) última vez que se guardó el Excel (dato interno del archivo),
+  // 2) fecha escrita en el nombre, 3) fecha del archivo en el equipo, 4) el momento de la carga
+  function fechaDeLosDatos(wb, archivo, modificado) {
+    const props = wb.Props || {};
+    const interna = props.ModifiedDate ? new Date(props.ModifiedDate) : null;
+    if (interna && !isNaN(interna)) return { fecha: interna.toISOString(), origen: 'última modificación del Excel' };
+    const enNombre = fechaEnNombre(archivo || '');
+    if (enNombre) return { fecha: enNombre.toISOString(), origen: 'fecha en el nombre del archivo' };
+    if (modificado) return { fecha: new Date(modificado).toISOString(), origen: 'fecha del archivo' };
+    return { fecha: new Date().toISOString(), origen: 'día en que se cargó' };
+  }
+
+  function leer(XLSX, wb, archivo, modificado) {
     let dist = null;
     const nombres = wb.SheetNames.slice().sort((a, b) => (normal(b).includes('DISTRIB') ? 1 : 0) - (normal(a).includes('DISTRIB') ? 1 : 0));
     for (const n of nombres) {
@@ -171,6 +190,8 @@
       grupos: dist.grupos,
       archivo: archivo || '',
       cargado: new Date().toISOString(),
+      // fechaDatos / origenFecha: de cuándo es la información (para avisar si está vieja)
+      ...(() => { const f = fechaDeLosDatos(wb, archivo, modificado); return { fechaDatos: f.fecha, origenFecha: f.origen }; })(),
       unidades: dist.unidades,
       activos: dist.activos,
       movimientos: oal ? leerTabla(XLSX, wb.Sheets[oal]) : { titulos: [], filas: [] },
@@ -178,7 +199,7 @@
     };
   }
 
-  const api = { leer, TIPO_SIN };
+  const api = { leer, fechaEnNombre, TIPO_SIN };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.LeerExcel = api;
 })(this);
