@@ -144,6 +144,77 @@
     return { clase, titulo, grupos, unidades: unidades.map((u) => u.nombre), activos };
   }
 
+  // ---------- Cuadro de situación de munición (asignada por obligación de consumo) ----------
+  // Títulos: «Municiones por calibre y efecto | Asignación de consumo 2026 | Actividades de consumo (FOCO, FECOME, PEC,
+  // HBC, Otros en la fila de abajo) | Total consumido | % Consumo | MUNICIÓN DISPONIBLE | Observaciones»
+  function leerMunicion(XLSX, hoja) {
+    const rango = XLSX.utils.decode_range(hoja['!ref'] || 'A1');
+    const celda = (f, c) => hoja[XLSX.utils.encode_cell({ r: f, c })];
+    const texto = (f, c) => limpiar((celda(f, c) || {}).v);
+    let fila = -1;
+    for (let f = rango.s.r; f <= Math.min(rango.e.r, rango.s.r + 40) && fila < 0; f++) {
+      for (let c = rango.s.c; c <= rango.e.c; c++) if (/DISPONIBLE/.test(normal(texto(f, c))) && /MUNICION/.test(normal(texto(f, c)))) { fila = f; break; }
+    }
+    if (fila < 0) return null;
+
+    const col = { actividades: [] };
+    for (let c = rango.s.c; c <= rango.e.c; c++) {
+      const n = normal(texto(fila, c));
+      if (/^MUNICION.*CALIBRE|^MUNICIONES/.test(n)) col.nombre = c;
+      else if (n.startsWith('ASIGNACION')) col.asignado = c;
+      else if (n.startsWith('TOTAL CONSUMIDO')) col.consumido = c;
+      else if (n.includes('CONSUMO') && n.includes('%')) col.porcentaje = c;
+      else if (n.includes('DISPONIBLE')) col.disponible = c;
+      else if (n.startsWith('OBSERV')) col.obs = c;
+    }
+    if (col.nombre == null) col.nombre = rango.s.c;
+    // Actividades: los subtítulos de la fila de abajo, entre la asignación y el total consumido
+    const hasta = col.consumido != null ? col.consumido : rango.e.c;
+    for (let c = (col.asignado != null ? col.asignado + 1 : col.nombre + 1); c < hasta; c++) {
+      const t = texto(fila + 1, c);
+      if (t) col.actividades.push({ col: c, nombre: t });
+    }
+    const inicio = col.actividades.length ? fila + 2 : fila + 1;
+    const valor = (f, c) => (c == null ? 0 : numero(String((celda(f, c) || {}).v ?? '').replace(/^-$/, '')));
+
+    const municiones = [];
+    for (let f = inicio; f <= rango.e.r; f++) {
+      const nombre = texto(f, col.nombre);
+      if (!nombre) continue;
+      // las filas de la firma (nombre, grado, cargo) no traen ningún número
+      const conNumeros = [col.asignado, col.consumido, col.disponible].some((c) => c != null && typeof (celda(f, c) || {}).v === 'number');
+      if (!conNumeros) continue;
+      const actividades = {};
+      let suma = 0;
+      for (const a of col.actividades) { const n = valor(f, a.col); if (n) { actividades[a.nombre] = n; suma += n; } }
+      municiones.push({
+        nombre,
+        asignado: valor(f, col.asignado),
+        actividades,
+        sumaActividades: suma,
+        consumido: valor(f, col.consumido),
+        disponible: valor(f, col.disponible),
+        nota: texto(f, col.obs),
+        fila: f + 1
+      });
+    }
+    // Título, fecha de corte («… AL 30OCT») y año
+    let titulo = '';
+    let anio = '';
+    for (let f = rango.s.r; f < fila; f++) {
+      for (let c = rango.s.c; c <= rango.e.c; c++) {
+        const t = texto(f, c);
+        if (!titulo && /CUADRO/.test(normal(t))) titulo = t;
+        if (/^ANO$/.test(normal(t).replace(/[^A-Z]/g, ''))) {
+          for (let k = c + 1; k <= rango.e.c; k++) { const v = texto(f, k); if (/^\d{4}$/.test(v)) { anio = v; break; } }
+        }
+      }
+    }
+    const m = normal(titulo).match(/AL\s*(\d{1,2})\s*(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\s*(\d{4})?/);
+    const corte = m ? new Date(Number(m[3] || anio || new Date().getFullYear()), MESES[m[2]], Number(m[1]), 12).toISOString() : null;
+    return { titulo, corte, actividades: col.actividades.map((a) => a.nombre), municiones };
+  }
+
   // Hojas simples (OAL y combustible): primera fila = títulos
   function leerTabla(XLSX, hoja) {
     const filas = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: '', raw: false });
@@ -174,6 +245,16 @@
   }
 
   function leer(XLSX, wb, archivo, modificado) {
+    const fecha = () => { const f = fechaDeLosDatos(wb, archivo, modificado); return { fechaDatos: f.fecha, origenFecha: f.origen }; };
+    // ¿Es el cuadro de munición?
+    for (const n of wb.SheetNames) {
+      const mun = leerMunicion(XLSX, wb.Sheets[n]);
+      if (mun && mun.municiones.length) {
+        // la información es de la fecha de corte del cuadro («… AL 30OCT»), aunque el Excel se haya guardado después
+        const f = mun.corte ? { fechaDatos: mun.corte, origenFecha: 'fecha de corte del cuadro' } : fecha();
+        return { clase: 'municion', archivo: archivo || '', cargado: new Date().toISOString(), ...f, ...mun };
+      }
+    }
     let dist = null;
     const nombres = wb.SheetNames.slice().sort((a, b) => (normal(b).includes('DISTRIB') ? 1 : 0) - (normal(a).includes('DISTRIB') ? 1 : 0));
     for (const n of nombres) {

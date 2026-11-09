@@ -203,6 +203,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .etiqueta.marcada { background: var(--verde); color: #fff; }
 .tipo { font-size: 12px; color: var(--suave); text-transform: uppercase; letter-spacing: .03em; }
 .alerta-txt { color: var(--rojo); font-weight: 600; font-size: 13px; }
+.item .alerta-txt { grid-column: 1 / -1; }
 .nota-txt { grid-column: 1 / -1; background: #e3f6fb; color: #0b4a5c; border-radius: 6px; padding: 4px 8px; font-size: 14px; font-weight: 600; }
 @media (prefers-color-scheme: dark) { .nota-txt { background: #12384a; color: #bfe9f7; } }
 mark { background: #ffe58a; color: inherit; border-radius: 2px; }
@@ -226,6 +227,17 @@ mark { background: #ffe58a; color: inherit; border-radius: 2px; }
 .unidad .linea-tipo { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; border-top: 1px dotted var(--linea); padding: 3px 0; }
 
 .ayuda { color: var(--suave); }
+
+/* Munición: barra de consumo con la marca de lo que debería llevarse a la fecha de corte */
+.item.atrasada { border-left-color: var(--rojo); }
+.item.al-dia { border-left-color: var(--verde-rev); }
+.consumo { grid-column: 1 / -1; }
+.consumo .fondo-barra { position: relative; background: var(--verde-claro); border-radius: 4px; height: 14px; overflow: visible; }
+.consumo .relleno { background: var(--verde); height: 100%; border-radius: 4px; max-width: 100%; }
+.item.atrasada .consumo .relleno { background: var(--rojo); }
+.consumo .meta { position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--texto); border-radius: 2px; }
+.consumo .linea { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin-top: 4px; color: var(--suave); }
+.consumo .linea b { color: var(--texto); }
 
 table { width: 100%; border-collapse: collapse; background: var(--papel); border-radius: 10px; overflow: hidden; }
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--linea); text-align: left; font-size: 14px; vertical-align: top; }

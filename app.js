@@ -3,10 +3,11 @@
   'use strict';
 
   // Cada Excel se guarda por separado (la clave de activos es la de siempre, para no perder lo ya cargado)
-  const CLAVES = { activos: 'activos_escinf_datos', vestuario: 'activos_escinf_vestuario' };
+  const CLAVES = { activos: 'activos_escinf_datos', vestuario: 'activos_escinf_vestuario', municion: 'activos_escinf_municion' };
   const LIBROS = {
     activos: { nombre: 'activos bélicos', ejemplo: 'DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 22OCT2026.xlsx' },
-    vestuario: { nombre: 'vestuario y equipo', ejemplo: 'CUADRO DISTRIBUCIÓN VEST Y EQUIPO ESCINF 2026.xlsx' }
+    vestuario: { nombre: 'vestuario y equipo', ejemplo: 'CUADRO DISTRIBUCIÓN VEST Y EQUIPO ESCINF 2026.xlsx' },
+    municion: { nombre: 'munición', ejemplo: 'CUADROS MUNICIÓN AL 30OCT.xlsx' }
   };
   const CLAVE_LIBRO = 'activos_escinf_libro';
   const DIAS_LIMITE = 15; // pasado este plazo, la información se considera vieja
@@ -17,7 +18,7 @@
   };
 
   const $ = (id) => document.getElementById(id);
-  const estado = { libros: { activos: null, vestuario: null }, libro: 'activos', datos: null, tipo: '', vista: 'buscar' };
+  const estado = { libros: { activos: null, vestuario: null, municion: null }, libro: 'activos', datos: null, tipo: '', vista: 'buscar' };
 
   const normal = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -115,6 +116,8 @@
     $('busqueda').value = '';
     $('filtroRevista').value = '';
     $('filtroNota').value = '';
+    $('busquedaMun').value = '';
+    $('filtroMun').value = '';
     const datos = estado.libros[clase];
     if (datos) { mostrarDatos(datos); return; }
     estado.datos = null;
@@ -137,6 +140,20 @@
     const a = antiguedad(datos);
     $('fuente').textContent = `${datos.archivo || 'Excel cargado'} · información del ${dia(a.fecha)} · cargado el ${dia(datos.cargado)}`;
     pintarAvisoViejo();
+    // Pestañas: la munición tiene su propia vista; las demás, buscar y por unidad
+    const pestana = (v) => document.querySelector(`#pestanas [data-vista="${v}"]`);
+    const esMunicion = datos.clase === 'municion';
+    pestana('municion').hidden = !esMunicion;
+    pestana('buscar').hidden = esMunicion;
+    pestana('unidades').hidden = esMunicion;
+    if (esMunicion) {
+      pestana('movimientos').hidden = true;
+      pestana('combustible').hidden = true;
+      pintarMunicion();
+      pintarAlertas();
+      irA(estado.vista === 'alertas' ? 'alertas' : 'municion');
+      return;
+    }
     $('tipos').hidden = new Set(datos.activos.map((a) => a.tipo)).size < 2;
     $('busqueda').placeholder = 'Escriba lo que busca: ' +
       (datos.clase === 'vestuario' ? 'casco, mochila, carpa, botas…' : 'fusil, galil, radio, casco, camioneta…');
@@ -150,7 +167,6 @@
     if ($('filtroRevista').hidden) $('filtroRevista').value = '';
     if ($('filtroNota').hidden) $('filtroNota').value = '';
     // Pestañas de hojas que este Excel no trae
-    const pestana = (v) => document.querySelector(`#pestanas [data-vista="${v}"]`);
     pestana('movimientos').hidden = !datos.movimientos.filas.length;
     pestana('combustible').hidden = !datos.combustible.filas.length;
     if (pestana(estado.vista).hidden) estado.vista = 'buscar';
@@ -163,6 +179,130 @@
     pintarTabla($('tablaCombustible'), datos.combustible, ['CANTIDAD']);
     pintarAlertas();
     irA(estado.vista);
+  }
+
+  // ---------- Munición ----------
+  // Parte del año transcurrida a la fecha de corte del cuadro: lo que «debería» llevarse consumido si se consume parejo
+  function avanceDelAnio(d) {
+    const corte = new Date(d.corte || d.fechaDatos || d.cargado);
+    const inicio = new Date(corte.getFullYear(), 0, 1);
+    const fin = new Date(corte.getFullYear() + 1, 0, 1);
+    return { corte, esperado: Math.min(1, (corte - inicio) / (fin - inicio)) };
+  }
+
+  // Cuentas de cada munición: % consumido, lo que falta consumir y si alcanza lo disponible
+  function cuentasMunicion(m, esperado) {
+    const pct = m.asignado ? m.consumido / m.asignado : null;
+    const falta = Math.max(0, m.asignado - m.consumido);
+    return {
+      pct,
+      falta,
+      atrasada: m.asignado > 0 && pct < esperado,
+      noAlcanza: m.asignado > 0 && falta > m.disponible,
+      descuadre: m.sumaActividades !== m.consumido
+    };
+  }
+  const porc = (x) => (x == null ? '—' : Math.round(x * 100) + '%');
+
+  function pintarMunicion() {
+    const d = estado.datos;
+    const { corte, esperado } = avanceDelAnio(d);
+    $('corteMun').innerHTML = `${esc(d.titulo || 'Situación de munición')}.<br>
+      Al ${corte.toLocaleDateString('es-CL')} ya pasó el <b>${porc(esperado)}</b> del año: la munición asignada
+      que lleve menos que eso consumido se marca <b style="color:var(--rojo)">en rojo (consumo atrasado)</b>.`;
+    const asignadas = d.municiones.filter((m) => m.asignado > 0);
+    const asignado = asignadas.reduce((s, m) => s + m.asignado, 0);
+    const consumido = asignadas.reduce((s, m) => s + Math.min(m.consumido, m.asignado), 0);
+    const atrasadas = asignadas.filter((m) => cuentasMunicion(m, esperado).atrasada).length;
+    const noAlcanza = asignadas.filter((m) => cuentasMunicion(m, esperado).noAlcanza).length;
+    $('resumenMun').innerHTML = [
+      [d.municiones.length, 'tipos de munición'],
+      [asignadas.length, 'con asignación de consumo 2026'],
+      [porc(asignado ? consumido / asignado : 0), 'consumido de lo asignado (total)'],
+      [atrasadas, 'con consumo atrasado'],
+      [noAlcanza, 'no alcanza lo disponible'],
+      [d.municiones.filter((m) => m.disponible > 0).length, 'con munición disponible']
+    ].map(([n, t]) => `<div class="cifra"><b>${n}</b><span>${t}</span></div>`).join('');
+    pintarListaMunicion();
+  }
+
+  function pintarListaMunicion() {
+    const d = estado.datos;
+    const { esperado } = avanceDelAnio(d);
+    const palabras = normal($('busquedaMun').value).split(/\s+/).filter(Boolean);
+    const filtro = $('filtroMun').value;
+    let lista = d.municiones.map((m) => ({ m, c: cuentasMunicion(m, esperado) })).filter(({ m, c }) => {
+      if (filtro === 'asignada' && !m.asignado) return false;
+      if (filtro === 'atrasada' && !c.atrasada) return false;
+      if (filtro === 'no_alcanza' && !c.noAlcanza) return false;
+      if (filtro === 'disponible' && !m.disponible) return false;
+      if (filtro === 'nota' && !m.nota) return false;
+      const texto = normal(m.nombre + ' ' + m.nota);
+      return palabras.every((p) => texto.includes(p));
+    });
+    const orden = $('ordenMun').value;
+    if (orden === 'falta') lista.sort((x, y) => y.c.falta - x.c.falta);
+    if (orden === 'porcentaje') lista.sort((x, y) => (x.c.pct ?? 9) - (y.c.pct ?? 9));
+    if (orden === 'disponible') lista.sort((x, y) => y.m.disponible - x.m.disponible);
+    $('contadorMun').textContent = lista.length ? `${lista.length} tipo${lista.length === 1 ? '' : 's'} de munición` : 'No hay munición con esos filtros.';
+    $('listaMun').innerHTML = lista.map(({ m, c }) => {
+      const actividades = Object.entries(m.actividades)
+        .map(([a, n]) => `<span class="etiqueta">${esc(a)}: <b>${miles(n)}</b></span>`).join('');
+      const barra = m.asignado ? `<div class="consumo">
+          <div class="fondo-barra"><div class="relleno" style="width:${Math.min(100, c.pct * 100)}%"></div>
+            <div class="meta" style="left:${esperado * 100}%" title="Lo que debería llevarse a la fecha de corte"></div></div>
+          <div class="linea"><span>Asignado <b>${miles(m.asignado)}</b></span><span>Consumido <b>${miles(m.consumido)}</b> (${porc(c.pct)})</span>
+            <span>Falta consumir <b>${miles(c.falta)}</b></span></div></div>`
+        : `<div class="consumo"><div class="linea"><span>Sin asignación de consumo 2026</span>${m.consumido ? `<span>Consumido <b>${miles(m.consumido)}</b></span>` : ''}</div></div>`;
+      const avisos = [
+        c.atrasada ? `🔴 Consumo atrasado: lleva ${porc(c.pct)} y ya pasó el ${porc(esperado)} del año` : '',
+        c.noAlcanza ? `⚠️ No alcanza: faltan consumir ${miles(c.falta)} y hay ${miles(m.disponible)} disponibles` : '',
+        c.descuadre ? `⚠️ Las actividades suman ${miles(m.sumaActividades)} pero el total consumido dice ${miles(m.consumido)}` : ''
+      ].filter(Boolean).map((t) => `<div class="alerta-txt">${t}</div>`).join('');
+      return `<div class="item ${m.asignado ? (c.atrasada ? 'atrasada' : 'al-dia') : ''}">
+        <div><div class="tipo">Munición</div><div class="nombre">${resaltar(m.nombre, palabras)}</div></div>
+        <div class="total"><b>${miles(m.disponible)}</b><small>disponible</small></div>
+        ${actividades ? `<div class="reparto">${actividades}</div>` : ''}
+        ${barra}
+        ${avisos}
+        ${m.nota ? `<div class="nota-txt">📝 ${resaltar(m.nota, palabras)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function alertasMunicion() {
+    const d = estado.datos;
+    const { esperado } = avanceDelAnio(d);
+    const con = d.municiones.map((m) => ({ m, c: cuentasMunicion(m, esperado) }));
+    const bloques = [];
+    const noAlcanza = con.filter((x) => x.c.noAlcanza);
+    if (noAlcanza.length) {
+      bloques.push(`<div class="bloque-alerta grave"><h3>⚠️ No alcanza lo disponible para cumplir lo asignado (${noAlcanza.length})</h3>
+        <p>Lo que falta consumir es más que la munición disponible: hay que pedirla o reprogramar.</p>
+        ${tablaHTML({ titulos: ['Munición', 'Asignado', 'Falta consumir', 'Disponible'],
+          filas: noAlcanza.map(({ m, c }) => [m.nombre, miles(m.asignado), miles(c.falta), miles(m.disponible)]) }, ['ASIGNADO', 'FALTA', 'DISPONIBLE'])}</div>`);
+    }
+    const atrasadas = con.filter((x) => x.c.atrasada);
+    if (atrasadas.length) {
+      bloques.push(`<div class="bloque-alerta"><h3>🔴 Consumo atrasado (${atrasadas.length})</h3>
+        <p>Ya pasó el ${porc(esperado)} del año y esta munición lleva menos consumido que eso.</p>
+        ${tablaHTML({ titulos: ['Munición', 'Asignado', 'Consumido', '% consumo', 'Falta consumir'],
+          filas: atrasadas.sort((x, y) => x.c.pct - y.c.pct).map(({ m, c }) => [m.nombre, miles(m.asignado), miles(m.consumido), porc(c.pct), miles(c.falta)]) },
+        ['ASIGNADO', 'CONSUMIDO', '% CONSUMO', 'FALTA'])}</div>`);
+    }
+    const descuadre = con.filter((x) => x.c.descuadre);
+    if (descuadre.length) {
+      bloques.push(`<div class="bloque-alerta grave"><h3>⚠️ Total consumido no cuadra con las actividades (${descuadre.length})</h3>
+        <p>La suma de FOCO, FECOME, PEC, HBC y otros no es igual a la columna «Total consumido». Revisar en el Excel.</p>
+        ${tablaHTML({ titulos: ['Munición', 'Suma de actividades', 'Total consumido'],
+          filas: descuadre.map(({ m }) => [m.nombre, miles(m.sumaActividades), miles(m.consumido)]) }, ['SUMA', 'TOTAL'])}</div>`);
+    }
+    const conNota = d.municiones.filter((m) => m.nota);
+    if (conNota.length) {
+      bloques.push(`<div class="bloque-alerta"><h3>📝 Observaciones del S-4 (${conNota.length})</h3>
+        ${tablaHTML({ titulos: ['Munición', 'Disponible', 'Observación'], filas: conNota.map((m) => [m.nombre, miles(m.disponible), m.nota]) }, ['DISPONIBLE'])}</div>`);
+    }
+    return { html: bloques.join(''), cuenta: noAlcanza.length + descuadre.length };
   }
 
   function irA(vista) {
@@ -337,6 +477,13 @@
 
   function pintarAlertas() {
     const d = estado.datos;
+    if (d.clase === 'municion') {
+      const m = alertasMunicion();
+      const viejaM = antiguedad(d).vieja ? 1 : 0;
+      $('listaAlertas').innerHTML = cuadroFechas() + (m.html || '<p>Sin otras alertas. 👍</p>');
+      $('nAlertas').textContent = viejaM + m.cuenta || '';
+      return;
+    }
     const bloques = [];
     const conNota = d.activos.filter((a) => a.nota);
     if (conNota.length) {
@@ -376,6 +523,7 @@
   $('archivo').addEventListener('change', (e) => { cargarArchivo(e.target.files[0]); e.target.value = ''; });
   $('imprimir').addEventListener('click', () => window.print());
   ['busqueda', 'filtroUnidad', 'filtroRevista', 'filtroNota', 'orden'].forEach((id) => $(id).addEventListener('input', pintarLista));
+  ['busquedaMun', 'filtroMun', 'ordenMun'].forEach((id) => $(id).addEventListener('input', pintarListaMunicion));
   $('tipos').addEventListener('click', (e) => {
     const b = e.target.closest('.chip');
     if (!b) return;
@@ -419,7 +567,7 @@
 
   for (const clase of Object.keys(CLAVES)) {
     const previos = recuperar(clase);
-    if (previos && previos.activos) estado.libros[clase] = previos;
+    if (previos && (previos.activos || previos.municiones)) estado.libros[clase] = previos;
   }
   let ultimo = 'activos';
   try { ultimo = localStorage.getItem(CLAVE_LIBRO) || 'activos'; } catch (e) { /* no importa */ }

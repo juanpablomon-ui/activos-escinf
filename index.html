@@ -35,9 +35,11 @@
   <nav class="libros" id="libros">
     <button data-libro="activos" class="activo">🎖 Activos bélicos <small></small></button>
     <button data-libro="vestuario">🎒 Vestuario y equipo <small></small></button>
+    <button data-libro="municion">💥 Munición <small></small></button>
   </nav>
 
   <nav class="pestanas" id="pestanas" hidden>
+    <button data-vista="municion" hidden>💥 Situación de munición</button>
     <button data-vista="buscar" class="activa">🔎 Buscar material</button>
     <button data-vista="unidades">🏢 Por unidad</button>
     <button data-vista="movimientos">🔁 Movimientos OAL</button>
@@ -54,7 +56,7 @@
         <div class="icono-grande">📦</div>
         <h2 id="bienvenidaTitulo">Cargue el Excel de distribución de activos bélicos</h2>
         <p>Arrastre aquí el archivo del S-4 (por ejemplo <b id="bienvenidaEjemplo">DISTRIBUCIÓN ACTIVOS BÉLICOS ESCINF S-4 22OCT2026.xlsx</b>) o use el botón <b>📂 Cargar Excel</b>.</p>
-        <p class="nota">La app reconoce sola qué Excel es (activos bélicos o vestuario y equipo) y lo guarda en su sección.</p>
+        <p class="nota">La app reconoce sola qué Excel es (activos bélicos, vestuario y equipo o munición) y lo guarda en su sección.</p>
         <p class="nota">El archivo se lee en este computador. No se envía a ninguna parte.</p>
       </div>
     </section>
@@ -84,6 +86,31 @@
       <div class="chips" id="tipos"></div>
       <p class="contador" id="contador"></p>
       <div id="lista" class="lista"></div>
+    </section>
+
+    <!-- Munición (cuadro de situación de munición asignada por obligación de consumo) -->
+    <section id="vista-municion" class="vista" hidden>
+      <p class="ayuda" id="corteMun"></p>
+      <div class="resumen" id="resumenMun"></div>
+      <div class="filtros">
+        <input type="search" id="busquedaMun" placeholder="Escriba lo que busca: 5,56, fogueo, granada, 81 mm…" autocomplete="off">
+        <select id="filtroMun">
+          <option value="">Toda la munición</option>
+          <option value="asignada">Con asignación 2026</option>
+          <option value="atrasada">🔴 Consumo atrasado</option>
+          <option value="no_alcanza">⚠️ No alcanza lo disponible</option>
+          <option value="disponible">Con munición disponible</option>
+          <option value="nota">📝 Con observación</option>
+        </select>
+        <select id="ordenMun">
+          <option value="excel">Orden del Excel</option>
+          <option value="falta">Más por consumir primero</option>
+          <option value="porcentaje">Menor % de consumo primero</option>
+          <option value="disponible">Más disponible primero</option>
+        </select>
+      </div>
+      <p class="contador" id="contadorMun"></p>
+      <div id="listaMun" class="lista"></div>
     </section>
 
     <!-- Por unidad -->
